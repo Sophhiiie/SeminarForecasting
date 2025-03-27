@@ -1,1 +1,10 @@
 # packages that need to be installed
+
+
+##### Data
+- install striprtf
+- install panda
+import os
+import pandas as pd
+import re
+from striprtf.striprtf import rtf_to_text
