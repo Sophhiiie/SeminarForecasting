@@ -1,50 +1,51 @@
 import os
 import pandas as pd
+from striprtf.striprtf import rtf_to_text
+from concurrent.futures import ThreadPoolExecutor
+import re
 
-# Processing the sector specific ETFs
+# Define folders
+factiva1 = "/Users/sophiemerks/Desktop/Seminar/Code/Seminar code/data/Factiva-data-short-version/Factiva-20250324-1505"
+factiva2 = "/Users/sophiemerks/Desktop/Seminar/Code/Seminar code/data/Factiva-data-short-version/Factiva-20250325-1240_(2)"
 
+# Get list of .rtf files from both folders
+def get_rtf_files(folder):
+    return [os.path.join(folder, file) for file in os.listdir(folder) if file.endswith('.rtf')]
 
-etf_folder = "/Users/sophiemerks/Desktop/Seminar/Code/Seminar code/data/etfs_per_sector_2021"
+all_files = get_rtf_files(factiva1) + get_rtf_files(factiva2)
 
-# List all .csv files in the folder
-etf_files = [f for f in os.listdir(etf_folder) if f.endswith(".csv")]
+# Function to read and convert RTF content
+def process_file(filepath):
+    try:
+        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+            text = rtf_to_text(content)
+            return {'filename': os.path.basename(filepath), 'text': text}
+    except Exception as e:
+        return {'filename': os.path.basename(filepath), 'text': '', 'error': str(e)}
 
+# Use multithreading for faster processing
+with ThreadPoolExecutor() as executor:
+    results = list(executor.map(process_file, all_files))
 
-etf_files = [f for f in os.listdir(etf_folder) if f.endswith(".csv")]
+# Create DataFrame
+df = pd.DataFrame(results)
 
-# Create a list to hold individual DataFrames
-all_etfs = []
+# Regex pattern for dates like '30 June 2021' or '5 July 2020'
+date_pattern = re.compile(r'\b\d{1,2} [A-Z][a-z]+ \d{4}\b')
 
-# Read and store each ETF CSV
-for filename in etf_files:
-    filepath = os.path.join(etf_folder, filename)
+def extract_date(text):
+    match = date_pattern.search(text)
+    return match.group(0) if match else None
 
-    # Read the current CSV file
-    df = pd.read_csv(filepath)
+# Add date column
+df['date'] = df['text'].apply(extract_date)
 
-    # Extract the ETF name from the filename (e.g., XLB from XLB ETF Stock Price History.csv)
-    etf_name = filename.split(' ')[0]
+# Apply the function to add a 'date' column
+df['date'] = df['text'].apply(extract_date)
 
-    # Add a column to indicate the ETF name
-    df['ETF'] = etf_name
+# Optional: convert string date to datetime object
+df['date'] = pd.to_datetime(df['date'], format='%d %B %Y', errors='coerce')
 
-    # Rename columns for clarity (if needed)
-    df.columns = ['Date', 'Price', 'Open', 'High', 'Low', 'Volume', 'Change %', 'ETF']
-
-    # Convert 'Date' column to datetime for consistency
-    df['Date'] = pd.to_datetime(df['Date'])
-
-    # Append to the list
-    all_etfs.append(df)
-
-# Combine all ETF DataFrames into one large DataFrame
-combined_df = pd.concat(all_etfs, ignore_index=True)
-
-# Check the first few rows of the combined data
-print(combined_df.head())
-
-# Save the combined DataFrame to a CSV file
-output_path = "data/processed_all_etfs.csv"
-combined_df.to_csv(output_path, index=False)
-
-print(f"✅ Combined ETF data saved to {output_path}")
+# Optional: save to CSV
+df.to_csv('factiva_combined2.csv', index=False)

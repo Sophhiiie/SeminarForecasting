@@ -8,3 +8,6 @@ import os
 import pandas as pd
 import re
 from striprtf.striprtf import rtf_to_text
+
+pip install torch
+pip install transformers
